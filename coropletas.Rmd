@@ -1,0 +1,288 @@
+---
+title: "Tarea Leaflet"
+author: "Juan Miguel Víquez"
+date: "11/4/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+
+```{r}
+# Leaflet
+library(leaflet)
+
+# sf
+library(sf)
+
+# tidyr
+library(tidyr)
+library(dplyr)
+sf_cantones <-
+  st_read(
+    "https://raw.githubusercontent.com/taller-r-jornadas-sigtd-2020/datos/master/cantones.geojson",
+    quiet = T
+  )
+
+# Data frame de casos activos por cantón, con fechas en las columnas
+df_activos_cantones_ancho <-
+  read.csv(
+    "https://raw.githubusercontent.com/pf0953-programaciongeoespacialr-2020/datos/master/covid19/ms/covid19-activos-cantones-20201027.csv"
+  )
+df_positivos_cantones_ancho <-
+  read.csv(
+    "https://raw.githubusercontent.com/pf0953-programaciongeoespacialr-2020/datos/master/covid19/ms/covid19-positivos-cantones-20201027.csv"
+  )
+df_recuperados_cantones_ancho <-
+  read.csv(
+    "https://raw.githubusercontent.com/pf0953-programaciongeoespacialr-2020/datos/master/covid19/ms/covid19-recuperados-cantones-20201027.csv"
+  )
+df_fallecidos_cantones_ancho <-
+  read.csv(
+    "https://raw.githubusercontent.com/pf0953-programaciongeoespacialr-2020/datos/master/covid19/ms/covid19-fallecidos-cantones-20201027.csv"
+  )
+# Data frame activos con fechas en las filas
+df_activos_cantones <-
+  df_activos_cantones_ancho %>%
+  pivot_longer(
+    cols = c(-cod_provin,-provincia,-cod_canton,-canton),
+    names_to = "fecha",
+    values_to = "activos"
+  )
+
+df_activos_cantones$fecha <-
+  as.Date(df_activos_cantones$fecha, "X%d.%m.%Y")
+
+
+df_activos_cantones_ultima_fecha <-
+  df_activos_cantones %>%
+  filter(fecha == max(fecha, na.rm = TRUE)) %>%
+  select(cod_canton, activos)
+
+sf_activos_cantones_ultima_fecha <-
+  left_join(sf_cantones,
+            df_activos_cantones_ultima_fecha,
+            by = c('cod_canton')) %>%
+  arrange(desc(activos))
+
+
+# Data frame positivos con fechas en las filas
+df_positivos_cantones <-
+  df_positivos_cantones_ancho %>%
+  pivot_longer(
+    cols = c(-cod_provin, -provincia, -cod_canton, -canton),
+    names_to = "fecha",
+    values_to = "positivos"
+  )
+
+df_positivos_cantones$fecha <-
+  as.Date(df_positivos_cantones$fecha, "X%d.%m.%Y")
+
+df_positivos_cantones_ultima_fecha <-
+  df_positivos_cantones %>%
+  filter(fecha == max(fecha, na.rm = TRUE)) %>%
+  select(cod_canton, positivos)
+
+sf_positivos_cantones_ultima_fecha <-
+  left_join(sf_cantones,
+            df_positivos_cantones_ultima_fecha,
+            by = c('cod_canton')) %>%
+  arrange(desc(positivos))
+
+
+
+
+# Data frame fallecidos con fechas en las filas
+df_fallecidos_cantones <-
+  df_fallecidos_cantones_ancho %>%
+  pivot_longer(
+    cols = c(-cod_provin, -provincia, -cod_canton, -canton),
+    names_to = "fecha",
+    values_to = "fallecidos"
+  )
+
+df_fallecidos_cantones$fecha <-
+  as.Date(df_fallecidos_cantones$fecha, "X%d.%m.%Y")
+df_fallecidos_cantones_ultima_fecha <-
+  df_fallecidos_cantones %>%
+  filter(fecha == max(fecha, na.rm = TRUE)) %>%
+  select(cod_canton, fallecidos)
+
+sf_fallecidos_cantones_ultima_fecha <-
+  left_join(sf_cantones,
+            df_fallecidos_cantones_ultima_fecha,
+            by = c('cod_canton')) %>%
+  arrange(desc(fallecidos))
+
+# Data frame recuperados con fechas en las filas
+df_recuperados_cantones <-
+  df_recuperados_cantones_ancho %>%
+  pivot_longer(
+    cols = c(-cod_provin, -provincia, -cod_canton, -canton),
+    names_to = "fecha",
+    values_to = "recuperados"
+  )
+
+df_recuperados_cantones$fecha <-
+  as.Date(df_recuperados_cantones$fecha, "X%d.%m.%Y")
+df_recuperados_cantones_ultima_fecha <-
+  df_recuperados_cantones %>%
+  filter(fecha == max(fecha, na.rm = TRUE)) %>%
+  select(cod_canton, recuperados)
+
+sf_recuperados_cantones_ultima_fecha <-
+  left_join(sf_cantones,
+            df_recuperados_cantones_ultima_fecha,
+            by = c('cod_canton')) %>%
+  arrange(desc(recuperados))
+
+```
+
+## Mapa coropletas 
+
+```{r}
+bins <- c(0, 100, 500, 1000, 2000, Inf)
+paleta <-
+  colorBin("Purples", domain = sf_activos_cantones_ultima_fecha$activos, bins = bins)
+bins2 <- c(0, 100, 500, 1000, 2000, Inf)
+paleta2 <-
+  colorBin("Reds", domain = sf_recuperados_cantones_ultima_fecha$recuperados, bins = bins2)
+bins3 <- c(0, 5, 20, 100, 200, Inf)
+paleta3 <-
+  colorBin("Blues", domain = sf_fallecidos_cantones_ultima_fecha$fallecidos, bins = bins3)
+bins4 <- c(0, 100, 500, 1000, 2000, Inf)
+paleta4 <-
+  colorBin("Greens", domain = sf_positivos_cantones_ultima_fecha$positivos, bins = bins4)
+leaflet() %>%
+  fitBounds(
+    lng1 = -86,
+    lng2 = -82,
+    lat1 = 8,
+    lat2 = 11
+  ) %>%
+  addProviderTiles(providers$Esri.WorldImagery, group = "Imágenes de ESRI") %>%
+  addProviderTiles(providers$Stamen.TonerLite, group = "Stamen Toner Lite") %>%
+  addProviderTiles(providers$OpenStreetMap.Mapnik, group = "OpenStreetMap") %>%
+  addPolygons(
+    data = sf_activos_cantones_ultima_fecha,
+    fillColor = ~ paleta(activos),
+    stroke = T,
+    fillOpacity = 1,
+    color = "Black",
+    weight = 0.2,
+    opacity = 0.5,
+    group = "Activos",
+    popup = paste(
+      "Provincia: ",
+      sf_activos_cantones_ultima_fecha$provincia,
+      "<br>",
+      "Cantón: ",
+      sf_activos_cantones_ultima_fecha$canton,
+      "<br>",
+      "activos: ",
+      sf_activos_cantones_ultima_fecha$activos
+    )
+    
+  ) %>%
+  addPolygons(
+    data = sf_recuperados_cantones_ultima_fecha,
+    fillColor = ~ paleta2(recuperados),
+    stroke = T,
+    fillOpacity = 1,
+    color = "Black",
+    weight = 0.2,
+    opacity = 0.5,
+    group = "Recuperados",
+    popup = paste(
+      "Provincia: ",
+      sf_recuperados_cantones_ultima_fecha$provincia,
+      "<br>",
+      "Cantón: ",
+      sf_recuperados_cantones_ultima_fecha$canton,
+      "<br>",
+      "recuperados: ",
+      sf_recuperados_cantones_ultima_fecha$recuperados
+    )
+  ) %>%
+  addPolygons(
+    data = sf_fallecidos_cantones_ultima_fecha,
+    fillColor = ~ paleta3(fallecidos),
+    stroke = T,
+    fillOpacity = 1,
+    color = "Black",
+    weight = 0.2,
+    opacity = 0.5,
+    group = "Fallecidos",
+    popup = paste(
+      "Provincia: ",
+      sf_fallecidos_cantones_ultima_fecha$provincia,
+      "<br>",
+      "Cantón: ",
+      sf_fallecidos_cantones_ultima_fecha$canton,
+      "<br>",
+      "fallecidos: ",
+      sf_fallecidos_cantones_ultima_fecha$fallecidos
+    )
+  ) %>%
+  addPolygons(
+    data = sf_positivos_cantones_ultima_fecha,
+    fillColor = ~ paleta4(positivos),
+    stroke = T,
+    fillOpacity = 1,
+    color = "Black",
+    weight = 0.2,
+    opacity = 0.5,
+    group = "Positivos",
+    popup = paste(
+      "Provincia: ",
+      sf_positivos_cantones_ultima_fecha$provincia,
+      "<br>",
+      "Cantón: ",
+      sf_positivos_cantones_ultima_fecha$canton,
+      "<br>",
+      "positivos: ",
+      sf_positivos_cantones_ultima_fecha$positivos
+    )
+  ) %>%
+  
+  addLegend(
+    "bottomleft",
+    pal = paleta,
+    title = "activos",
+    values =sf_activos_cantones_ultima_fecha$activos,
+    group = "Activos"
+  ) %>%
+   addLegend(
+    "bottomleft",
+    pal = paleta2,
+    title = "recuperados",
+    values =sf_recuperados_cantones_ultima_fecha$recuperados,
+    group = "Recuperados"
+   ) %>%
+  addLegend(
+    "bottomleft",
+    pal = paleta3,
+    title = "fallecidos",
+    values =sf_fallecidos_cantones_ultima_fecha$fallecidos,
+    group = "Fallecidos"
+     ) %>%
+  addLegend(
+    "bottomright",
+    pal = paleta4,
+    title = "positivos",
+    values =sf_positivos_cantones_ultima_fecha$positivos,
+    group = "Positivos"
+  ) %>%
+  
+  addLayersControl(
+    baseGroups = c("OpenStreetMap", "Stamen Toner Lite", "Imágenes de ESRI"),
+    overlayGroups = c("Activos", "Recuperados", "Fallecidos", "Positivos"),
+    options = layersControlOptions(collapsed = TRUE)
+    
+  )
+```
+
